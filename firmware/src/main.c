@@ -92,9 +92,12 @@ static void core1_loop()
     }
 }
 
+#define HID_TICK_SCALE 1
 static void core0_loop()
 {
     uint64_t next_frame = time_us_64();
+
+    uint64_t hid_tick_counter = 0;
 
     while(1) {
         tud_task();
@@ -111,7 +114,10 @@ static void core0_loop()
         touch_update();
         button_update();
 
-        hid_update();
+        if (++hid_tick_counter == HID_TICK_SCALE) {
+            hid_update();
+            hid_tick_counter = 0;
+        }
     }
 }
 

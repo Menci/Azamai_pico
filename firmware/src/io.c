@@ -381,5 +381,6 @@ bool io_is_active()
         return false;
     }
 
+    return true;
     return time_us_64() < ctx.last_io_time + IO_TIMEOUT_SEC * 1000000;
 }

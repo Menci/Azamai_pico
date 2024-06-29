@@ -18,7 +18,7 @@ static mai_cfg_t default_cfg = {
     .color = {
         .key_on = 0xc0c0c0,
         .key_off = 0x080808,
-        .level = 127,
+        .level = 255,
     },
     .sense = {
         .filter = 0x10,
@@ -26,11 +26,11 @@ static mai_cfg_t default_cfg = {
         .debounce_release = 2,
      },
     .hid = {
-        .joy = 0,
-        .nkro = 1,
+        .joy = 1,
+        .nkro = 0,
     },
     .rgb = {
-        .per_button = 1,
+        .per_button = 2,
         .per_aux = 1,
     },
     .alt = {

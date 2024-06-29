@@ -8,6 +8,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <string.h>
 
 #include "hardware/gpio.h"
 #include "hardware/timer.h"
@@ -17,6 +18,7 @@
 #include "board_defs.h"
 
 static const uint8_t gpio_def[] = BUTTON_DEF;
+static const bool button_pressed[] = BUTTON_PRESSED;
 static uint8_t gpio_real[] = BUTTON_DEF;
 
 #define BUTTON_NUM (sizeof(gpio_def))
@@ -38,7 +40,7 @@ void button_init()
         gpio_init(gpio);
         gpio_set_function(gpio, GPIO_FUNC_SIO);
         gpio_set_dir(gpio, GPIO_IN);
-        gpio_pull_down(gpio);
+        gpio_pull_up(gpio);
     }
 }
 
@@ -72,13 +74,16 @@ static uint16_t button_reading;
 
 /* If a switch flips, it freezes for a while */
 #define DEBOUNCE_FREEZE_TIME_US 3000
+#define DELAY_TICKS 0
 void button_update()
 {
     uint64_t now = time_us_64();
     uint16_t buttons = 0;
 
     for (int i = BUTTON_NUM - 1; i >= 0; i--) {
-        bool sw_pressed = gpio_get(gpio_real[i]);
+        bool pressed_expected = button_pressed[i];
+        bool value = gpio_get(gpio_real[i]);
+        bool sw_pressed = (value && pressed_expected) || (!value && !pressed_expected);
         
         if (now >= sw_freeze_time[i]) {
             if (sw_pressed != sw_val[i]) {
@@ -93,7 +98,14 @@ void button_update()
         }
     }
 
-    button_reading = buttons;
+    if (DELAY_TICKS != 0) {
+        static uint16_t button_history[DELAY_TICKS];
+        button_reading = button_history[0];
+        memmove(&button_history[0], &button_history[1], sizeof(button_history[0]) * (DELAY_TICKS - 1));
+        button_history[DELAY_TICKS - 1] = buttons;
+    } else {
+        button_reading = buttons;
+    }
 }
 
 uint16_t button_read()

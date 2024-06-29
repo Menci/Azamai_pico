@@ -10,12 +10,13 @@
 #define I2C_SCL 7
 #define I2C_FREQ 400*1000
 
-#define RGB_PIN 13
+#define RGB_PIN 14
 #define RGB_ORDER GRB // or RGB
-#define RGB_BUTTON_MAP { 5, 4, 3, 2, 1, 0, 7, 6, 8, 9, 10, 11 }
+#define RGB_BUTTON_MAP { 3, 2, 1, 0, 7, 6, 5, 4, 8, 9, 10, 11 }
 
 /* 8 main buttons, Test, Service, Navigate, Coin */
-#define BUTTON_DEF { 1, 0, 4, 5, 8, 9, 3, 2, 12, 11, 10, 14 }
+#define BUTTON_DEF     { 1, 0, 4, 5, 8, 9, 3, 2, 10, 11, 12, 13 }
+#define BUTTON_PRESSED { 1, 1, 1, 1, 1, 1, 1, 1,  0,  0,  0,  0 }
 
 /* HID Keycode: https://github.com/hathach/tinyusb/blob/master/src/class/hid/hid.h */
 // P1: WEDCXZAQ3(F1)(F2)(F3) P2: (Numpad)89632147*(F1)(F2)(F3)
