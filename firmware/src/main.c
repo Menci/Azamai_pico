@@ -139,7 +139,7 @@ void init()
     button_init();
     rgb_init();
 
-    nfc_attach_i2c(I2C_PORT);
+    nfc_init_spi(SPI_PORT, SPI_MISO, SPI_SCK, SPI_MOSI, SPI_NSS);
     nfc_init();
     aime_init(cdc_aime_putc);
     aime_set_mode(mai_cfg->aime.mode);
