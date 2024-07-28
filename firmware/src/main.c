@@ -21,6 +21,8 @@
 #include "tusb.h"
 #include "usb_descriptors.h"
 
+#include "uart.h"
+
 #include "aime.h"
 #include "nfc.h"
 
@@ -134,6 +136,8 @@ void init()
     mutex_init(&core1_io_lock);
 
     save_init(board_id_32() ^ 0xcafe1111, &core1_io_lock);
+
+    io_uart_init(UART_TX, UART_RX);
 
     touch_init();
     button_init();

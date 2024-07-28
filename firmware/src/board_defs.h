@@ -16,6 +16,9 @@
 #define SPI_MOSI 19
 #define SPI_NSS 17
 
+#define UART_TX 8
+#define UART_RX 9
+
 #define RGB_PIN 14
 #define RGB_ORDER GRB // or RGB
 #define RGB_BUTTON_MAP { 3, 2, 1, 0, 7, 6, 5, 4, 8, 9, 10, 11 }

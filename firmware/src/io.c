@@ -5,6 +5,8 @@
 #include "tusb.h"
 #include "usb_descriptors.h"
 
+#include "uart.h"
+
 #include "touch.h"
 #include "rgb.h"
 
@@ -370,7 +372,8 @@ static void send_touch()
 
 void io_update()
 {
-    update_itf(cdc);
+    // update_itf(cdc);
+    io_uart_run(1);
     update_itf(cdc + 1);
     send_touch();
 }
