@@ -53,7 +53,15 @@ static mai_cfg_t default_cfg = {
     .aime = {
         .mode = 0,
         .virtual_aic = 0,
-    }
+    },
+    .tweak = {
+#ifdef AZAMAI_BUILD
+        .main_button_active_high = 1,
+#else
+        .main_button_active_high = 0,
+#endif
+        .aux_button_active_high = 0,
+    },
 };
 
 mai_runtime_t mai_runtime;

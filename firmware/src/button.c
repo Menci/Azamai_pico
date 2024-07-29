@@ -21,9 +21,6 @@
 #include "board_defs.h"
 
 static const uint8_t gpio_def[] = BUTTON_DEF;
-#ifdef AZAMAI_BUILD
-static const bool button_pressed[] = BUTTON_PRESSED;
-#endif
 static uint8_t gpio_real[] = BUTTON_DEF;
 
 #define BUTTON_NUM (sizeof(gpio_def))
@@ -49,11 +46,20 @@ void button_init()
     }
 }
 
+static inline bool button_pressed(int id)
+{
+    bool reading = gpio_get(gpio_real[id]);
+    bool active_level = id < 8 ? mai_cfg->tweak.main_button_active_high :
+                                 mai_cfg->tweak.aux_button_active_high;
+
+    return reading == active_level;
+}
+
 bool button_is_stuck()
 {
 #ifndef AZAMAI_BUILD
     for (int i = 0; i < BUTTON_NUM; i++) {
-        if (!gpio_get(gpio_real[i])) {
+        if (button_pressed(i)) {
             return true;
         }
     }
@@ -95,14 +101,8 @@ void button_update()
     uint16_t buttons = 0;
 
     for (int i = BUTTON_NUM - 1; i >= 0; i--) {
-#ifdef AZAMAI_BUILD
-        bool pressed_expected = button_pressed[i];
-        bool value = gpio_get(gpio_real[i]);
-        bool sw_pressed = (value && pressed_expected) || (!value && !pressed_expected);
-#else
-        bool sw_pressed = !gpio_get(gpio_real[i]);
-#endif
-
+        bool sw_pressed = button_pressed(i);
+        
         if (now >= sw_freeze_time[i]) {
             if (sw_pressed != sw_val[i]) {
                 sw_val[i] = sw_pressed;

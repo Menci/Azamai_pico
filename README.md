@@ -25,7 +25,14 @@ This project is the most complex one among all my projects.
 ## Check Out My Other Projects
 You can also check out my other cool projects.
 
-<img src="https://github.com/whowechina/popn_pico/raw/main/doc/main.jpg" height="100px"><img src="https://github.com/whowechina/iidx_pico/raw/main/doc/main.jpg" height="100px"><img src="https://github.com/whowechina/iidx_teeny/raw/main/doc/main.jpg" height="100px"><img src="https://github.com/whowechina/chu_pico/raw/main/doc/main.jpg" height="100px"><img src="https://github.com/whowechina/mai_pico/raw/main/doc/main.jpg" height="100px"><img src="https://github.com/whowechina/diva_pico/raw/main/doc/main.jpg" height="100px"><img src="https://github.com/whowechina/aic_pico/raw/main/doc/main.jpg" height="100px">
+<img src="https://github.com/whowechina/popn_pico/raw/main/doc/main.jpg" height="100px">
+<img src="https://github.com/whowechina/iidx_pico/raw/main/doc/main.jpg" height="100px">
+<img src="https://github.com/whowechina/iidx_teeny/raw/main/doc/main.jpg" height="100px">
+<img src="https://github.com/whowechina/chu_pico/raw/main/doc/main.jpg" height="100px">
+<img src="https://github.com/whowechina/mai_pico/raw/main/doc/main.jpg" height="100px">
+<img src="https://github.com/whowechina/diva_pico/raw/main/doc/main.jpg" height="100px">
+<img src="https://github.com/whowechina/aic_pico/raw/main/doc/main.gif" height="100px">
+<img src="https://github.com/whowechina/groove_pico/raw/main/doc/main.gif" height="100px">
 
 * Popn Pico: https://github.com/whowechina/popn_pico
 * IIDX Pico: https://github.com/whowechina/iidx_pico
@@ -34,12 +41,32 @@ You can also check out my other cool projects.
 * Mai Pico: https://github.com/whowechina/mai_pico
 * Diva Pico: https://github.com/whowechina/diva_pico
 * AIC Pico: https://github.com/whowechina/aic_pico
+* Groove Pico: https://github.com/whowechina/groove_pico
 
 ## **Disclaimer** ##
 I made this project in my personal time with no financial benefit or sponsorship. I will continue to improve the project. I have done my best to ensure that everything is accurate and functional, there's always a chance that mistakes may occur. I cannot be held responsible for any loss of your time or money that may result from using this open source project. Thank you for your understanding.
 
 ## About the License
 It's CC-NC. So DIY for yourself and for your friend, don't make money from it.
+
+## Builds Gallery
+Before we start, I want to encourage you with some hobbyist builds.
+
+### **Lavide's Build**
+  Lavide made a nice compact all-in-one Mai Pico cab!  
+  <img src="doc/lavide_1.jpg" width="30%"><img src="doc/lavide_2.jpg" width="30%"><img src="doc/lavide_3.jpg" width="21.65%">
+
+### **Romper's Build**
+  Romper made a full-size con using Mai Pico's touch design.  
+  <img src="doc/romper_1.png" width="28%"><img src="doc/romper_2.jpg" width="50%">  
+  Check out his build guide here.  
+  https://github.com/ir0nq/maimai-homemade-controller
+
+### **imfrea's Build**
+  imfrea designed a nice-looking and inexpensive acrylic housing for Mai Pico.  
+  <img src="doc/imfrea_1.jpg" width="30%"><img src="doc/imfrea_2.jpg" width="30%">  
+  You can download the acrylic case designs from his fork of Mai Pico here.  
+  https://github.com/imfrea/mai_pico
 
 ## HOW TO BUILD
 ### PCB

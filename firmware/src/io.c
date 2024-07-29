@@ -348,6 +348,7 @@ static void update_itf(cdc_t *cdc)
     }
 }
 
+#ifndef AZAMAI_BUILD
 static void send_touch()
 {
     if ((ctx.touch_interface == 0) | (!ctx.stat)) {
@@ -371,6 +372,7 @@ static void send_touch()
     tud_cdc_n_write(ctx.touch_interface, report, sizeof(report));
     tud_cdc_n_write_flush(ctx.touch_interface);
 }
+#endif
 
 void io_update()
 {
