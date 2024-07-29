@@ -115,7 +115,9 @@ void handle_display(int argc, char *argv[])
         disp_sense();
         disp_hid();
         disp_gpio();
+#ifndef AZAMAI_BUILD
         disp_touch();
+#endif
         disp_aime();
         return;
     }
@@ -135,7 +137,9 @@ void handle_display(int argc, char *argv[])
             disp_gpio();
             break;
         case 4:
+#ifndef AZAMAI_BUILD
             disp_touch();
+#endif
             break;
         case 5:
             disp_aime();
@@ -190,6 +194,7 @@ static void handle_level(int argc, char *argv[])
 
 static void handle_stat(int argc, char *argv[])
 {
+#ifndef AZAMAI_BUILD
     if (argc == 0) {
         for (int col = 0; col < 4; col++) {
             printf(" %2dA |", col * 4 + 1);
@@ -208,6 +213,7 @@ static void handle_stat(int argc, char *argv[])
     } else {
         printf("Usage: stat [reset]\n");
     }
+#endif
 }
 
 static void handle_hid(int argc, char *argv[])
@@ -271,7 +277,9 @@ static void handle_filter(int argc, char *argv[])
 
     mai_cfg->sense.filter = (ffi << 6) | (sfi << 4) | intv;
 
+#ifndef AZAMAI_BUILD
     touch_update_config();
+#endif
     config_changed();
     disp_sense();
 }
@@ -349,7 +357,9 @@ static void handle_sense(int argc, char *argv[])
         }
     }
 
+#ifndef AZAMAI_BUILD
     touch_update_config();
+#endif
     config_changed();
     disp_sense();
 }
@@ -381,7 +391,9 @@ static void handle_debounce(int argc, char *argv[])
     mai_cfg->sense.debounce_touch = touch;
     mai_cfg->sense.debounce_release = release;
 
+#ifndef AZAMAI_BUILD
     touch_update_config();
+#endif
     config_changed();
     disp_sense();
 }
@@ -397,6 +409,7 @@ static void print_raw_zones(const char *title, const uint16_t *raw, int num)
 
 static void handle_raw()
 {
+#ifndef AZAMAI_BUILD
     printf("Touch raw readings:\n");
     const uint16_t *raw = touch_raw();
     printf("   Sensor: 0: %s, 1: %s 2: %s\n",
@@ -410,6 +423,7 @@ static void handle_raw()
     print_raw_zones("C", raw + 16, 2);
     print_raw_zones("D", raw + 18, 8);
     print_raw_zones("E", raw + 26, 8);
+#endif
 }
 
 static void handle_whoami()
@@ -524,6 +538,7 @@ static bool set_touch_map(int argc, char *argv[])
 
 static void handle_touch(int argc, char *argv[])
 {
+#ifndef AZAMAI_BUILD
     const char *usage = "Usage: touch [<sensor> <channel> <key>]\n"
                         "  sensor: 0..2\n"
                         " channel: 0..11\n"
@@ -535,6 +550,7 @@ static void handle_touch(int argc, char *argv[])
     } else {
         printf(usage);
     }
+#endif
 }
 
 

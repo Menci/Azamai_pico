@@ -8,7 +8,10 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+
+#ifdef AZAMAI_BUILD
 #include <string.h>
+#endif
 
 #include "hardware/gpio.h"
 #include "hardware/timer.h"
@@ -18,7 +21,9 @@
 #include "board_defs.h"
 
 static const uint8_t gpio_def[] = BUTTON_DEF;
+#ifdef AZAMAI_BUILD
 static const bool button_pressed[] = BUTTON_PRESSED;
+#endif
 static uint8_t gpio_real[] = BUTTON_DEF;
 
 #define BUTTON_NUM (sizeof(gpio_def))
@@ -46,6 +51,13 @@ void button_init()
 
 bool button_is_stuck()
 {
+#ifndef AZAMAI_BUILD
+    for (int i = 0; i < BUTTON_NUM; i++) {
+        if (!gpio_get(gpio_real[i])) {
+            return true;
+        }
+    }
+#endif
     return false;
 }
 
@@ -74,17 +86,23 @@ static uint16_t button_reading;
 
 /* If a switch flips, it freezes for a while */
 #define DEBOUNCE_FREEZE_TIME_US 3000
+#ifdef AZAMAI_BUILD
 #define DELAY_TICKS 0
+#endif
 void button_update()
 {
     uint64_t now = time_us_64();
     uint16_t buttons = 0;
 
     for (int i = BUTTON_NUM - 1; i >= 0; i--) {
+#ifdef AZAMAI_BUILD
         bool pressed_expected = button_pressed[i];
         bool value = gpio_get(gpio_real[i]);
         bool sw_pressed = (value && pressed_expected) || (!value && !pressed_expected);
-        
+#else
+        bool sw_pressed = !gpio_get(gpio_real[i]);
+#endif
+
         if (now >= sw_freeze_time[i]) {
             if (sw_pressed != sw_val[i]) {
                 sw_val[i] = sw_pressed;
@@ -98,6 +116,7 @@ void button_update()
         }
     }
 
+#ifdef AZAMAI_BUILD
     if (DELAY_TICKS != 0) {
         static uint16_t button_history[DELAY_TICKS];
         button_reading = button_history[0];
@@ -106,6 +125,9 @@ void button_update()
     } else {
         button_reading = buttons;
     }
+#else
+    button_reading = buttons;
+#endif
 }
 
 uint16_t button_read()

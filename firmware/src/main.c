@@ -21,7 +21,9 @@
 #include "tusb.h"
 #include "usb_descriptors.h"
 
+#ifdef AZAMAI_BUILD
 #include "uart.h"
+#endif
 
 #include "aime.h"
 #include "nfc.h"
@@ -94,12 +96,16 @@ static void core1_loop()
     }
 }
 
+#ifdef AZAMAI_BUILD
 #define HID_TICK_SCALE 1
+#endif
 static void core0_loop()
 {
     uint64_t next_frame = time_us_64();
 
+#ifdef AZAMAI_BUILD
     uint64_t hid_tick_counter = 0;
+#endif
 
     while(1) {
         tud_task();
@@ -113,13 +119,20 @@ static void core0_loop()
         sleep_until(next_frame);
         next_frame += 1000; // 1KHz
 
+#ifndef AZAMAI_BUILD
         touch_update();
+#endif
+
         button_update();
 
+#ifdef AZAMAI_BUILD
         if (++hid_tick_counter == HID_TICK_SCALE) {
             hid_update();
             hid_tick_counter = 0;
         }
+#else
+        hid_update();
+#endif
     }
 }
 
@@ -137,13 +150,20 @@ void init()
 
     save_init(board_id_32() ^ 0xcafe1111, &core1_io_lock);
 
+#ifdef AZAMAI_BUILD
     io_uart_init(UART_TX, UART_RX);
-
+#else
     touch_init();
+#endif
+
     button_init();
     rgb_init();
 
+#ifdef AZAMAI_BUILD
     nfc_init_spi(SPI_PORT, SPI_MISO, SPI_SCK, SPI_MOSI, SPI_NSS);
+#else
+    nfc_attach_i2c(I2C_PORT);
+#endif
     nfc_init();
     aime_init(cdc_aime_putc);
     aime_set_mode(mai_cfg->aime.mode);

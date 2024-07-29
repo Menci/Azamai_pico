@@ -5,11 +5,14 @@
 
 #if defined BOARD_MAI_PICO
 
+#ifndef AZAMAI_BUILD
 #define I2C_PORT i2c1
-#define I2C_SDA 26
-#define I2C_SCL 27
+#define I2C_SDA 6
+#define I2C_SCL 7
 #define I2C_FREQ 400*1000
+#endif
 
+#ifdef AZAMAI_BUILD
 #define SPI_PORT spi0
 #define SPI_MISO 16
 #define SPI_SCK 18
@@ -18,14 +21,25 @@
 
 #define UART_TX 8
 #define UART_RX 9
+#endif
 
+#ifdef AZAMAI_BUILD
 #define RGB_PIN 14
 #define RGB_ORDER GRB // or RGB
 #define RGB_BUTTON_MAP { 3, 2, 1, 0, 7, 6, 5, 4, 8, 9, 10, 11 }
+#else
+#define RGB_PIN 13
+#define RGB_ORDER GRB // or RGB
+#define RGB_BUTTON_MAP { 5, 4, 3, 2, 1, 0, 7, 6, 8, 9, 10, 11 }
+#endif
 
 /* 8 main buttons, Test, Service, Navigate, Coin */
+#ifdef AZAMAI_BUILD
 #define BUTTON_DEF     { 0, 1, 2, 3, 4, 5, 6, 7, 10, 11, 12, 13 }
 #define BUTTON_PRESSED { 1, 1, 1, 1, 1, 1, 1, 1,  0,  0,  0,  0 }
+#else
+#define BUTTON_DEF { 1, 0, 4, 5, 8, 9, 3, 2, 12, 11, 10, 14 }
+#endif
 
 /* HID Keycode: https://github.com/hathach/tinyusb/blob/master/src/class/hid/hid.h */
 // P1: WEDCXZAQ3(F1)(F2)(F3) P2: (Numpad)89632147*(F1)(F2)(F3)

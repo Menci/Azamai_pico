@@ -18,7 +18,11 @@ static mai_cfg_t default_cfg = {
     .color = {
         .key_on = 0xc0c0c0,
         .key_off = 0x080808,
+#ifdef AZAMAI_BUILD
         .level = 255,
+#else
+        .level = 127,
+#endif
     },
     .sense = {
         .filter = 0x10,
@@ -26,11 +30,20 @@ static mai_cfg_t default_cfg = {
         .debounce_release = 2,
      },
     .hid = {
+#ifdef AZAMAI_BUILD
         .joy = 1,
         .nkro = 0,
+#else
+        .joy = 0,
+        .nkro = 1,
+#endif
     },
     .rgb = {
+#ifdef AZAMAI_BUILD
         .per_button = 2,
+#else
+        .per_button = 1,
+#endif
         .per_aux = 1,
     },
     .alt = {

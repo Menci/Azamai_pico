@@ -5,7 +5,9 @@
 #include "tusb.h"
 #include "usb_descriptors.h"
 
+#ifdef AZAMAI_BUILD
 #include "uart.h"
+#endif
 
 #include "touch.h"
 #include "rgb.h"
@@ -372,10 +374,14 @@ static void send_touch()
 
 void io_update()
 {
-    // update_itf(cdc);
+#ifdef AZAMAI_BUILD
     io_uart_run(1);
     update_itf(cdc + 1);
+#else
+    update_itf(cdc);
+    update_itf(cdc + 1);
     send_touch();
+#endif
 }
 
 bool io_is_active()
@@ -384,6 +390,8 @@ bool io_is_active()
         return false;
     }
 
+#ifdef AZAMAI_BUILD
     return true;
+#endif
     return time_us_64() < ctx.last_io_time + IO_TIMEOUT_SEC * 1000000;
 }
