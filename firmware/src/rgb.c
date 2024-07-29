@@ -11,6 +11,10 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#ifdef AZAMAI_BUILD
+#include "aime.h"
+#endif
+
 #include "bsp/board.h"
 #include "hardware/pio.h"
 #include "hardware/timer.h"
@@ -22,6 +26,28 @@
 
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
 
+#ifdef AZAMAI_BUILD
+typedef struct {
+    int led_cnt;
+    int name; // the software index of the LED,
+              // not essentially the physical index
+
+    uint32_t buf;
+    struct {
+        uint32_t color; // current color
+        uint32_t target; // target color
+        uint16_t duration;
+        uint16_t elapsed;
+    } fade_ctx;
+} rgb_member_t;
+typedef struct {
+    int pin;
+    int member_cnt;
+    rgb_member_t *members;
+} rgb_pin_t;
+#define RGB_PIN(pin, ...) {pin, sizeof((rgb_member_t[]){__VA_ARGS__}) / sizeof(rgb_member_t), (rgb_member_t[]){__VA_ARGS__}}
+static const rgb_pin_t rgb_def[] = RGB_DEF;
+#else
 uint32_t rgb_buf[20];
 static struct {
     uint32_t color; // current color
@@ -30,6 +56,7 @@ static struct {
     uint16_t elapsed;
 } fade_ctx[20];
 static const uint8_t button_led_map[] = RGB_BUTTON_MAP;
+#endif
 
 #define _MAP_LED(x) _MAKE_MAPPER(x)
 #define _MAKE_MAPPER(x) MAP_LED_##x
@@ -117,12 +144,23 @@ static void drive_led()
     }
     last = now;
 
+#ifdef AZAMAI_BUILD
+    for (int i = 0; i < ARRAY_SIZE(rgb_def); i++) {
+        for (int j = 0; j < rgb_def[i].member_cnt; j++) {
+            rgb_member_t *member = &rgb_def[i].members[j];
+            for (int k = 0; k < member->led_cnt; k++) {
+                pio_sm_put_blocking(pio0, i, member->buf << 8u);
+            }
+        }
+    }
+#else
     for (int i = 0; i < ARRAY_SIZE(rgb_buf); i++) {
         int num = (i < 8) ? mai_cfg->rgb.per_button : mai_cfg->rgb.per_aux;
         for (int j = 0; j < num; j++) {
             pio_sm_put_blocking(pio0, 0, rgb_buf[i] << 8u);
         }
     }
+#endif
 }
 
 static inline uint32_t apply_level(uint32_t color)
@@ -148,6 +186,27 @@ static void fade_ctrl()
         return;
     }
 
+#ifdef AZAMAI_BUILD
+    for (int i = 0; i < ARRAY_SIZE(rgb_def); i++) {
+        for (int j = 0; j < rgb_def[i].member_cnt; j++) {
+            rgb_member_t *member = &rgb_def[i].members[j];
+            if (member->fade_ctx.duration == 0) {
+                continue;
+            }
+
+            member->fade_ctx.elapsed += delta_ms;
+            if (member->fade_ctx.elapsed >= member->fade_ctx.duration) {
+                member->fade_ctx.duration = 0;
+                member->buf = member->fade_ctx.target;
+                continue;
+            }
+
+            uint8_t progress = member->fade_ctx.elapsed * 255 / member->fade_ctx.duration;
+            uint32_t color = lerp(member->fade_ctx.color, member->fade_ctx.target, progress);
+            member->buf = apply_level(color);
+        }
+    }
+#else
     for (int i = 0; i < ARRAY_SIZE(fade_ctx); i++) {
         if (fade_ctx[i].duration == 0) {
             continue;
@@ -164,10 +223,40 @@ static void fade_ctrl()
         uint32_t color = lerp(fade_ctx[i].color, fade_ctx[i].target, progress);
         rgb_buf[i] = apply_level(color);
     }
+#endif
 
     last = now;
 }
 
+#ifdef AZAMAI_BUILD
+static void set_color(unsigned pin_index, unsigned name, uint32_t color, uint8_t speed)
+{
+    if (pin_index >= ARRAY_SIZE(rgb_def)) {
+        return;
+    }
+
+    rgb_member_t *member = NULL;
+    for (int i = 0; i < rgb_def[pin_index].member_cnt; i++) {
+        if (rgb_def[pin_index].members[i].name == name) {
+            member = &rgb_def[pin_index].members[i];
+            break;
+        }
+    }
+    if (!member) {
+        return;
+    }
+
+    if (speed > 0) {
+        member->fade_ctx.target = color;
+        member->fade_ctx.duration = 4095 / speed * 8;
+        member->fade_ctx.elapsed = 0;
+    } else {
+        member->fade_ctx.color = color;
+        member->fade_ctx.duration = 0;
+        member->buf = apply_level(color);
+    }
+}
+#else
 static void set_color(unsigned index, uint32_t color, uint8_t speed)
 {
     if (index >= ARRAY_SIZE(fade_ctx)) {
@@ -184,33 +273,53 @@ static void set_color(unsigned index, uint32_t color, uint8_t speed)
         rgb_buf[index] = apply_level(color);
     }
 }
+#endif
 
 void rgb_set_button(unsigned index, uint32_t color, uint8_t speed)
 {
+#ifdef AZAMAI_BUILD
+    set_color(0, index, color, speed);
+#else
     if (index >= ARRAY_SIZE(button_led_map)) {
         return;
     }
     set_color(button_led_map[index], color, speed);
+#endif
 }
 
 void rgb_set_cab(unsigned index, uint32_t color)
 {
+#ifdef AZAMAI_BUILD
+    set_color(1, index, color, 0);
+#else
     if (index >= 3) {
         return;
     }
     set_color(8 + index, color, 0);
+#endif
 }
 
 void rgb_init()
 {
     uint pio0_offset = pio_add_program(pio0, &ws2812_program);
 
+#ifdef AZAMAI_BUILD
+    for (int i = 0; i < ARRAY_SIZE(rgb_def); i++) {
+        gpio_set_drive_strength(rgb_def[i].pin, GPIO_DRIVE_STRENGTH_2MA);
+        ws2812_program_init(pio0, i, pio0_offset, rgb_def[i].pin, 800000, false);
+    }
+#else
     gpio_set_drive_strength(RGB_PIN, GPIO_DRIVE_STRENGTH_2MA);
     ws2812_program_init(pio0, 0, pio0_offset, RGB_PIN, 800000, false);
+#endif
 }
 
 void rgb_update()
 {
+#ifdef AZAMAI_BUILD
+    set_color(2, 0, aime_led_color(), 0);
+#endif
+
     fade_ctrl();
     drive_led();
 }
