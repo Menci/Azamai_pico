@@ -576,7 +576,9 @@ static bool handle_aime_mode(const char *mode)
     } else {
         return false;
     }
+#ifndef AZAMAI_BUILD
     aime_set_mode(mai_cfg->aime.mode);
+#endif
     config_changed();
     return true;
 }

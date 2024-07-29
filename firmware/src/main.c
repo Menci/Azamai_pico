@@ -182,7 +182,9 @@ void init()
 #endif
     nfc_init();
     aime_init(cdc_aime_putc);
+#ifndef AZAMAI_BUILD
     aime_set_mode(mai_cfg->aime.mode);
+#endif
     aime_virtual_aic(mai_cfg->aime.virtual_aic);
 
     cli_init("mai_pico>", "\n   << Mai Pico Controller >>\n"
