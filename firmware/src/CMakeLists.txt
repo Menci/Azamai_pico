@@ -1,7 +1,7 @@
 pico_sdk_init()
 
 include_directories(${CMAKE_CURRENT_LIST_DIR})
-add_compile_options(-Wall -Werror -Wfatal-errors -O3)
+add_compile_options(-Wall -Werror -Wfatal-errors -Og -g)
 
 function(make_firmware board board_def)
     add_executable(${board}

@@ -117,7 +117,11 @@ static void core1_loop()
 #endif
 static void core0_loop()
 {
+#ifdef AZAMAI_BUILD
+    absolute_time_t next_frame = get_absolute_time();
+#else
     uint64_t next_frame = time_us_64();
+#endif
 
 #ifdef AZAMAI_BUILD
     uint64_t hid_tick_counter = 0;
@@ -134,7 +138,7 @@ static void core0_loop()
 
 #ifdef AZAMAI_BUILD
         sleep_until(next_frame);
-        next_frame += 100; // 10KHz
+        next_frame = delayed_by_us(next_frame, 100); // 10KHz
                            // (since we have a 9600 UART bridge)
 #else
         sleep_until(next_frame);
