@@ -28,7 +28,7 @@
 #define RGB_ORDER GRB // or RGB
 #define RGB_COUNT 13
 #define RGB_DEF { \
-  /* Button */ RGB_PIN(14, {2, 3}, {2, 2}, {2, 1}, {2, 0}, {2, 7}, {2, 6}, {2, 5}, {2, 4}), \
+  /* Button */ RGB_PIN(22, {2, 3}, {2, 2}, {2, 1}, {2, 0}, {2, 7}, {2, 6}, {2, 5}, {2, 4}), \
   /*  Body  */ RGB_PIN(15, {1, 0}, {1, 1}, {1, 2}, {1, 3}), \
   /*  Aime  */ RGB_PIN(28, {2, 0}) \
 }
@@ -40,7 +40,7 @@
 
 /* 8 main buttons, Test, Service, Navigate, Coin */
 #ifdef AZAMAI_BUILD
-#define BUTTON_DEF { 0, 1, 2, 3, 4, 5, 6, 7, 10, 11, 12, 13 }
+#define BUTTON_DEF { 4, 5, 21, 20, 27, 26, 6, 7, 10, 11, 12, 13 }
 #else
 #define BUTTON_DEF { 1, 0, 4, 5, 8, 9, 3, 2, 12, 11, 10, 14 }
 #endif
