@@ -1,270 +1,210 @@
-// SPDX-License-Identifier: MIT
 /*
- * Copyright 2021 Álvaro Fernández Rojas <noltari@gmail.com>
+ * Mai Pico UART Bridge
+ * Menci <github.com/Menci>
+ *
+ * UART to USB CDC bridge
  */
 
-#include <hardware/irq.h>
-#include <hardware/structs/sio.h>
-#include <hardware/uart.h>
-#include <pico/stdlib.h>
-#include <string.h>
-#include <tusb.h>
+#include "hardware/gpio.h"
+#include "hardware/uart.h"
+#include "tusb.h"
+#include <stdarg.h>
 
-#if !defined(MIN)
-#define MIN(a, b) ((a > b) ? b : a)
-#endif /* MIN */
+#include "board_defs.h"
 
-#define BUFFER_SIZE 2560
+#define UART_BAUDRATE 9600
+#define UART_DATABITS 8
+#define UART_STOPBITS 1
 
-#define DEF_BIT_RATE 9600
-#define DEF_STOP_BITS 1
-#define DEF_PARITY 0
-#define DEF_DATA_BITS 8
+#define TOUCH_BUFFER_SIZE 16
 
 typedef struct {
-	uart_inst_t *const inst;
-	uint irq;
-	void *irq_fn;
-	uint8_t tx_pin;
-	uint8_t rx_pin;
-} uart_id_t;
+    bool left_brace; // "{"/"(" has been read
+    char buffer[TOUCH_BUFFER_SIZE + 1];
+    size_t i;
+} touch_buffer_t;
 
-typedef struct {
-	cdc_line_coding_t usb_lc;
-	cdc_line_coding_t uart_lc;
-	mutex_t lc_mtx;
-	uint8_t uart_buffer[BUFFER_SIZE];
-	uint32_t uart_pos;
-	mutex_t uart_mtx;
-	uint8_t usb_buffer[BUFFER_SIZE];
-	uint32_t usb_pos;
-	mutex_t usb_mtx;
-} uart_data_t;
+// static void cdprintf(const char *format, ...)
+// {
+//     char buffer[1024];
+//     va_list args;
+//     va_start(args, format);
+//     vsnprintf(buffer, sizeof(buffer), format, args);
+//     va_end(args);
+//     tud_cdc_n_write(0, buffer, strlen(buffer));
+// }
 
-void uart1_irq_fn(void);
+#define cdprintf(...) /* no op */
 
-uart_id_t UART_ID = {
-  .inst = uart1,
-  .irq = UART1_IRQ,
-  .irq_fn = &uart1_irq_fn,
-  .tx_pin = 0,
-  .rx_pin = 0,
-};
-
-uart_data_t UART_DATA;
-
-static inline uint databits_usb2uart(uint8_t data_bits)
+static bool touch_buffer_on_data(touch_buffer_t *buffer, uint8_t data)
 {
-	switch (data_bits) {
-		case 5:
-			return 5;
-		case 6:
-			return 6;
-		case 7:
-			return 7;
-		default:
-			return 8;
-	}
-}
+    if (buffer->left_brace)
+    {
+        if (data == '}' || data == ')')
+        {
+            // Null-terminate buffer
+            buffer->buffer[buffer->i] = 0;
+            // Reset buffer
+            buffer->i = 0;
+            buffer->left_brace = false;
+            return true;
+        }
 
-static inline uart_parity_t parity_usb2uart(uint8_t usb_parity)
-{
-	switch (usb_parity) {
-		case 1:
-			return UART_PARITY_ODD;
-		case 2:
-			return UART_PARITY_EVEN;
-		default:
-			return UART_PARITY_NONE;
-	}
-}
-
-static inline uint stopbits_usb2uart(uint8_t stop_bits)
-{
-	switch (stop_bits) {
-		case 2:
-			return 2;
-		default:
-			return 1;
-	}
-}
-
-void update_uart_cfg(uint8_t itf)
-{
-	const uart_id_t *ui = &UART_ID;
-	uart_data_t *ud = &UART_DATA;
-
-	mutex_enter_blocking(&ud->lc_mtx);
-
-	if (ud->usb_lc.bit_rate != ud->uart_lc.bit_rate) {
-		uart_set_baudrate(ui->inst, ud->usb_lc.bit_rate);
-		ud->uart_lc.bit_rate = ud->usb_lc.bit_rate;
-	}
-
-	if ((ud->usb_lc.stop_bits != ud->uart_lc.stop_bits) ||
-	    (ud->usb_lc.parity != ud->uart_lc.parity) ||
-	    (ud->usb_lc.data_bits != ud->uart_lc.data_bits)) {
-		uart_set_format(ui->inst,
-				databits_usb2uart(ud->usb_lc.data_bits),
-				stopbits_usb2uart(ud->usb_lc.stop_bits),
-				parity_usb2uart(ud->usb_lc.parity));
-		ud->uart_lc.data_bits = ud->usb_lc.data_bits;
-		ud->uart_lc.parity = ud->usb_lc.parity;
-		ud->uart_lc.stop_bits = ud->usb_lc.stop_bits;
-	}
-
-	mutex_exit(&ud->lc_mtx);
-}
-
-void usb_read_bytes(uint8_t itf)
-{
-	uart_data_t *ud = &UART_DATA;
-	uint32_t len = tud_cdc_n_available(itf);
-
-	if (len &&
-	    mutex_try_enter(&ud->usb_mtx, NULL)) {
-		len = MIN(len, BUFFER_SIZE - ud->usb_pos);
-		if (len) {
-			uint32_t count;
-
-			count = tud_cdc_n_read(itf, &ud->usb_buffer[ud->usb_pos], len);
-			ud->usb_pos += count;
-		}
-
-		mutex_exit(&ud->usb_mtx);
-	}
-}
-
-void usb_write_bytes(uint8_t itf)
-{
-	uart_data_t *ud = &UART_DATA;
-
-	if (ud->uart_pos &&
-	    mutex_try_enter(&ud->uart_mtx, NULL)) {
-		uint32_t count;
-
-		count = tud_cdc_n_write(itf, ud->uart_buffer, ud->uart_pos);
-		if (count < ud->uart_pos)
-			memmove(ud->uart_buffer, &ud->uart_buffer[count],
-			       ud->uart_pos - count);
-		ud->uart_pos -= count;
-
-		mutex_exit(&ud->uart_mtx);
-
-		if (count)
-			tud_cdc_n_write_flush(itf);
-	}
-}
-
-void usb_cdc_process(uint8_t itf)
-{
-	uart_data_t *ud = &UART_DATA;
-
-	mutex_enter_blocking(&ud->lc_mtx);
-	tud_cdc_n_get_line_coding(itf, &ud->usb_lc);
-	mutex_exit(&ud->lc_mtx);
-
-	usb_read_bytes(itf);
-	usb_write_bytes(itf);
-}
-
-static inline void uart_read_bytes(uint8_t itf)
-{
-	uart_data_t *ud = &UART_DATA;
-	const uart_id_t *ui = &UART_ID;
-
-	if (uart_is_readable(ui->inst)) {
-		mutex_enter_blocking(&ud->uart_mtx);
-
-		while (uart_is_readable(ui->inst) &&
-		       (ud->uart_pos < BUFFER_SIZE)) {
-			ud->uart_buffer[ud->uart_pos] = uart_getc(ui->inst);
-			ud->uart_pos++;
-		}
-
-		mutex_exit(&ud->uart_mtx);
-	}
-}
-
-void uart1_irq_fn(void)
-{
-	uart_read_bytes(1);
-}
-
-void uart_write_bytes(uint8_t itf)
-{
-	uart_data_t *ud = &UART_DATA;
-
-	if (ud->usb_pos &&
-	    mutex_try_enter(&ud->usb_mtx, NULL)) {
-		const uart_id_t *ui = &UART_ID;
-		uint32_t count = 0;
-
-		while (uart_is_writable(ui->inst) &&
-		       count < ud->usb_pos) {
-			uart_putc_raw(ui->inst, ud->usb_buffer[count]);
-			count++;
-		}
-
-		if (count < ud->usb_pos)
-			memmove(ud->usb_buffer, &ud->usb_buffer[count],
-			       ud->usb_pos - count);
-		ud->usb_pos -= count;
-
-		mutex_exit(&ud->usb_mtx);
-	}
+        if (buffer->i < TOUCH_BUFFER_SIZE)
+        {
+            buffer->buffer[buffer->i++] = data;
+        }
+    }
+    else
+    {
+        if (data == '{' || data == '(')
+        {
+            buffer->left_brace = true;
+        }
+    }
+    return false;
 }
 
 void io_uart_init(uint8_t tx_pin, uint8_t rx_pin)
 {
-	uart_id_t *ui = &UART_ID;
-	uart_data_t *ud = &UART_DATA;
+    gpio_set_function(tx_pin, GPIO_FUNC_UART);
+    gpio_set_function(rx_pin, GPIO_FUNC_UART);
+    gpio_set_pulls(tx_pin, 1, 0);
+    gpio_set_pulls(rx_pin, 1, 0);
 
-  ui->tx_pin = tx_pin;
-  ui->rx_pin = rx_pin;
+    uart_init(UART_PORT, UART_BAUDRATE);
+    uart_set_hw_flow(UART_PORT, false, false);
+    uart_set_format(UART_PORT, UART_DATABITS, UART_STOPBITS, UART_PARITY_NONE);
+    uart_set_fifo_enabled(UART_PORT, true);
+}
 
-	/* Pinmux */
-	gpio_set_function(ui->tx_pin, GPIO_FUNC_UART);
-	gpio_set_function(ui->rx_pin, GPIO_FUNC_UART);
+#define TOUCH_DATA_LENGTH 7
+struct {
+    char touch_data[TOUCH_DATA_LENGTH];
+    bool has_touch_data;
+    bool conditioning_mode;
+} touch_state;
 
-	/* USB CDC LC */
-	ud->usb_lc.bit_rate = DEF_BIT_RATE;
-	ud->usb_lc.data_bits = DEF_DATA_BITS;
-	ud->usb_lc.parity = DEF_PARITY;
-	ud->usb_lc.stop_bits = DEF_STOP_BITS;
+static void handle_u2t(uint8_t itf, char *buffer)
+{
+    size_t length = strlen(buffer);
+    if (length == 4) // "LAr2"
+    {
+        cdprintf("handle_u2t(): pass-through 4-byte response: %s\r\n", buffer);
 
-	/* UART LC */
-	ud->uart_lc.bit_rate = DEF_BIT_RATE;
-	ud->uart_lc.data_bits = DEF_DATA_BITS;
-	ud->uart_lc.parity = DEF_PARITY;
-	ud->uart_lc.stop_bits = DEF_STOP_BITS;
+        char write_buffer[] = "(LAr2)";
+        memcpy(write_buffer + 1, buffer, 4);
+        // if (tud_cdc_n_connected(itf))
+        {
+            tud_cdc_n_write(itf, write_buffer, strlen(write_buffer));
+            tud_cdc_n_write_flush(itf);
+        }
+    }
+    else if (length == 7) // "......."
+    {
+        if (touch_state.conditioning_mode)
+        {
+            cdprintf("handle_u2t(): ignored touch data %s in conditioning mode\r\n", buffer);
+            // ignore touch data in conditioning mode
+        }
+        else
+        {
+            if (!touch_state.has_touch_data ||
+                memcmp(touch_state.touch_data, buffer, TOUCH_DATA_LENGTH) != 0)
+            {
+                memcpy(touch_state.touch_data, buffer, TOUCH_DATA_LENGTH);
+                touch_state.has_touch_data = true;
 
-	/* Buffer */
-	ud->uart_pos = 0;
-	ud->usb_pos = 0;
+                cdprintf("handle_u2t(): updating touch data: %s\r\n", buffer);
+            }
 
-	/* Mutex */
-	mutex_init(&ud->lc_mtx);
-	mutex_init(&ud->uart_mtx);
-	mutex_init(&ud->usb_mtx);
+            char write_buffer[] = "(.......)";
+            memcpy(write_buffer + 1, buffer, TOUCH_DATA_LENGTH);
+            // if (tud_cdc_n_connected(itf))
+            {
+                tud_cdc_n_write(itf, write_buffer, strlen(write_buffer));
+                tud_cdc_n_write_flush(itf);
+            }
+        }
+    }
+}
 
-	/* UART start */
-	uart_init(ui->inst, ud->usb_lc.bit_rate);
-	uart_set_hw_flow(ui->inst, false, false);
-	uart_set_format(ui->inst, databits_usb2uart(ud->usb_lc.data_bits),
-			stopbits_usb2uart(ud->usb_lc.stop_bits),
-			parity_usb2uart(ud->usb_lc.parity));
-	uart_set_fifo_enabled(ui->inst, false);
+static void handle_t2u(uint8_t itf, char *buffer)
+{
+    if (strcmp(buffer, "RSET") == 0)
+    {
+        touch_state.has_touch_data = false;
+        touch_state.conditioning_mode = false;
+    }
+    else if (strcmp(buffer, "HALT") == 0)
+    {
+        touch_state.has_touch_data = false;
+        touch_state.conditioning_mode = true;
+    }
+    else if (strcmp(buffer, "STAT") == 0)
+    {
+        touch_state.conditioning_mode = false;
+    }
+    else if (touch_state.conditioning_mode &&
+             strlen(buffer) == 4 &&
+             (buffer[0] == 'L' || buffer[0] == 'R') && (buffer[2] == 'r' || buffer[2] == 'k'))
+    {
+        // conditioning mode command
+    }
+    else
+    {
+        cdprintf("handle_t2u(): Unknown command: %s\r\n", buffer);
+        return;
+    }
 
-	/* UART RX Interrupt */
-	irq_set_exclusive_handler(ui->irq, ui->irq_fn);
-	irq_set_enabled(ui->irq, true);
-	uart_set_irq_enables(ui->inst, true, false);
+    cdprintf("handle_t2u(): pass-through command: %s\r\n", buffer);
+
+    // Passthrough the command
+    uart_putc_raw(UART_PORT, '{');
+    for (size_t i = 0; i < 4; i++)
+    {
+        uart_putc_raw(UART_PORT, buffer[i]);
+    }
+    uart_putc_raw(UART_PORT, '}');
 }
 
 void io_uart_run(uint8_t itf)
 {
-  update_uart_cfg(itf);
-  usb_cdc_process(itf);
-  uart_write_bytes(itf);
+    static touch_buffer_t u2t, t2u;
+    while (uart_is_readable(UART_PORT))
+    {
+        if (touch_buffer_on_data(&u2t, uart_getc(UART_PORT)))
+        {
+            handle_u2t(itf, u2t.buffer);
+        }
+    }
+
+    static bool connected = false;
+    if (tud_cdc_n_connected(itf) && !connected)
+    {
+        connected = true;
+        cdprintf("io_uart_run(): connected to cdc\r\n");
+    }
+    else if (!tud_cdc_n_connected(itf) && connected)
+    {
+        connected = false;
+        cdprintf("io_uart_run(): disconnected from cdc\r\n");
+    }
+
+    if (tud_cdc_n_available(itf))
+    {
+        while (true)
+        {
+            int32_t ch = tud_cdc_n_read_char(itf);
+            if (ch < 0)
+            {
+                break;
+            }
+            cdprintf("io_uart_run(): from cdc: %c\r\n", ch);
+            if (touch_buffer_on_data(&t2u, ch))
+            {
+                handle_t2u(itf, t2u.buffer);
+            }
+        }
+    }
 }

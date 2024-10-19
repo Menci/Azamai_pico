@@ -161,14 +161,14 @@ static char serial_number_str[24] = "123456\0";
 static const char *string_desc_arr[] = {
     (const char[]){0x09, 0x04},  // 0: is supported language is English (0x0409)
     "SEGA", // 1: Manufacturer
-    "Mai Pico", // 2: Product
+    "Azamai", // 2: Product
     serial_number_str, // 3: Serials, use chip ID
     "I/O CONTROL BD;15257;01;90;1831;6679A;00;GOUT=14_ADIN=8,E_ROTIN=4_COININ=2_SWIN=2,E_UQ1=41,6;",
-    "Mai Pico NKRO",
-    "Mai Pico Command Line Port",
-    "Mai Pico Touch Port",
-    "Mai Pico LED Port",
-    "Mai Pico AIME Port",
+    "Azamai NKRO",
+    "Azamai Command Line Port",
+    "Azamai Touch Port",
+    "Azamai LED Port",
+    "Azamai AIME Port",
 };
 
 // Invoked when received GET STRING DESCRIPTOR request

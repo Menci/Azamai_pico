@@ -132,8 +132,14 @@ static void core0_loop()
         save_loop();
         cli_fps_count(0);
 
+#ifdef AZAMAI_BUILD
+        sleep_until(next_frame);
+        next_frame += 100; // 10KHz
+                           // (since we have a 9600 UART bridge)
+#else
         sleep_until(next_frame);
         next_frame += 1000; // 1KHz
+#endif
 
 #ifndef AZAMAI_BUILD
         touch_update();
