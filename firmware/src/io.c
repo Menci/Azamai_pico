@@ -378,7 +378,6 @@ static void send_touch()
 void io_update()
 {
 #ifdef AZAMAI_BUILD
-    io_uart_run(1);
     update_itf(cdc + 1);
 #else
     update_itf(cdc);

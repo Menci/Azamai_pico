@@ -19,7 +19,9 @@
 #define SPI_MOSI 19
 #define SPI_NSS 17
 
+#define UART_ITF 1
 #define UART_PORT uart1
+#define UART_IRQ UART1_IRQ
 #define UART_TX 8
 #define UART_RX 9
 #endif

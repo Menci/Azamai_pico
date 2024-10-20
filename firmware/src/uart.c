@@ -5,206 +5,103 @@
  * UART to USB CDC bridge
  */
 
+#include "class/cdc/cdc_device.h"
 #include "hardware/gpio.h"
 #include "hardware/uart.h"
+#include "hardware/irq.h"
+#include "portmacro.h"
 #include "tusb.h"
-#include <stdarg.h>
 
 #include "board_defs.h"
+
+#include <FreeRTOS.h>
+#include <queue.h>
+#include <stdint.h>
+#include <task.h>
 
 #define UART_BAUDRATE 9600
 #define UART_DATABITS 8
 #define UART_STOPBITS 1
 
-#define TOUCH_BUFFER_SIZE 16
+#define BUFFER_SIZE 1024
 
-typedef struct {
-    bool left_brace; // "{"/"(" has been read
-    char buffer[TOUCH_BUFFER_SIZE + 1];
-    size_t i;
-} touch_buffer_t;
+QueueHandle_t u2t_queue, t2u_queue;
 
-// static void cdprintf(const char *format, ...)
-// {
-//     char buffer[1024];
-//     va_list args;
-//     va_start(args, format);
-//     vsnprintf(buffer, sizeof(buffer), format, args);
-//     va_end(args);
-//     tud_cdc_n_write(0, buffer, strlen(buffer));
-// }
-
-#define cdprintf(...) /* no op */
-
-static bool touch_buffer_on_data(touch_buffer_t *buffer, uint8_t data)
+void u2t_read_isr()
 {
-    if (buffer->left_brace)
-    {
-        if (data == '}' || data == ')')
-        {
-            // Null-terminate buffer
-            buffer->buffer[buffer->i] = 0;
-            // Reset buffer
-            buffer->i = 0;
-            buffer->left_brace = false;
-            return true;
-        }
+	BaseType_t xHigherPriorityTaskWoken = pdFALSE;
 
-        if (buffer->i < TOUCH_BUFFER_SIZE)
-        {
-            buffer->buffer[buffer->i++] = data;
-        }
-    }
-    else
-    {
-        if (data == '{' || data == '(')
-        {
-            buffer->left_brace = true;
-        }
-    }
-    return false;
+	while (uart_is_readable(UART_PORT)) {
+		char ch = uart_getc(UART_PORT);
+		xQueueSendFromISR(u2t_queue, &ch, &xHigherPriorityTaskWoken);
+	}
+
+	portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 }
 
-void io_uart_init(uint8_t tx_pin, uint8_t rx_pin)
+void u2t_write_task()
 {
-    gpio_set_function(tx_pin, GPIO_FUNC_UART);
-    gpio_set_function(rx_pin, GPIO_FUNC_UART);
-    gpio_set_pulls(tx_pin, 1, 0);
-    gpio_set_pulls(rx_pin, 1, 0);
+	while (1) {
+		char ch;
+		if (xQueueReceive(u2t_queue, &ch, portMAX_DELAY) != pdTRUE) {
+			continue;
+		}
+		do {
+			tud_cdc_n_write_char(UART_ITF, ch);
+		} while (xQueueReceive(u2t_queue, &ch, 0) == pdTRUE);
 
-    uart_init(UART_PORT, UART_BAUDRATE);
-    uart_set_hw_flow(UART_PORT, false, false);
-    uart_set_format(UART_PORT, UART_DATABITS, UART_STOPBITS, UART_PARITY_NONE);
-    uart_set_fifo_enabled(UART_PORT, true);
+		tud_cdc_n_write_flush(UART_ITF);
+	}
 }
 
-#define TOUCH_DATA_LENGTH 7
-struct {
-    char touch_data[TOUCH_DATA_LENGTH];
-    bool has_touch_data;
-    bool conditioning_mode;
-} touch_state;
-
-static void handle_u2t(uint8_t itf, char *buffer)
+void t2u_read_task()
 {
-    size_t length = strlen(buffer);
-    if (length == 4) // "LAr2"
-    {
-        cdprintf("handle_u2t(): pass-through 4-byte response: %s\r\n", buffer);
-
-        char write_buffer[] = "(LAr2)";
-        memcpy(write_buffer + 1, buffer, 4);
-        // if (tud_cdc_n_connected(itf))
-        {
-            tud_cdc_n_write(itf, write_buffer, strlen(write_buffer));
-            tud_cdc_n_write_flush(itf);
-        }
-    }
-    else if (length == 7) // "......."
-    {
-        if (touch_state.conditioning_mode)
-        {
-            cdprintf("handle_u2t(): ignored touch data %s in conditioning mode\r\n", buffer);
-            // ignore touch data in conditioning mode
-        }
-        else
-        {
-            if (!touch_state.has_touch_data ||
-                memcmp(touch_state.touch_data, buffer, TOUCH_DATA_LENGTH) != 0)
-            {
-                memcpy(touch_state.touch_data, buffer, TOUCH_DATA_LENGTH);
-                touch_state.has_touch_data = true;
-
-                cdprintf("handle_u2t(): updating touch data: %s\r\n", buffer);
-            }
-
-            char write_buffer[] = "(.......)";
-            memcpy(write_buffer + 1, buffer, TOUCH_DATA_LENGTH);
-            // if (tud_cdc_n_connected(itf))
-            {
-                tud_cdc_n_write(itf, write_buffer, strlen(write_buffer));
-                tud_cdc_n_write_flush(itf);
-            }
-        }
-    }
+	const TickType_t xFrequency = pdMS_TO_TICKS(1);
+	while (1) {
+		char ch;
+		while (tud_cdc_n_available(UART_ITF) && (ch = tud_cdc_n_read_char(UART_ITF)) >= 0) {
+			xQueueSend(t2u_queue, &ch, xFrequency);
+		}
+		vTaskDelay(xFrequency);
+	}
 }
 
-static void handle_t2u(uint8_t itf, char *buffer)
+void t2u_write_task()
 {
-    if (strcmp(buffer, "RSET") == 0)
-    {
-        touch_state.has_touch_data = false;
-        touch_state.conditioning_mode = false;
-    }
-    else if (strcmp(buffer, "HALT") == 0)
-    {
-        touch_state.has_touch_data = false;
-        touch_state.conditioning_mode = true;
-    }
-    else if (strcmp(buffer, "STAT") == 0)
-    {
-        touch_state.conditioning_mode = false;
-    }
-    else if (touch_state.conditioning_mode &&
-             strlen(buffer) == 4 &&
-             (buffer[0] == 'L' || buffer[0] == 'R') && (buffer[2] == 'r' || buffer[2] == 'k'))
-    {
-        // conditioning mode command
-    }
-    else
-    {
-        cdprintf("handle_t2u(): Unknown command: %s\r\n", buffer);
-        return;
-    }
-
-    cdprintf("handle_t2u(): pass-through command: %s\r\n", buffer);
-
-    // Passthrough the command
-    uart_putc_raw(UART_PORT, '{');
-    for (size_t i = 0; i < 4; i++)
-    {
-        uart_putc_raw(UART_PORT, buffer[i]);
-    }
-    uart_putc_raw(UART_PORT, '}');
+	const TickType_t xFrequency = pdMS_TO_TICKS(1);
+	while (1) {
+		while (uart_is_writable(UART_PORT)) {
+			char ch;
+			if (xQueueReceive(t2u_queue, &ch, portMAX_DELAY) != pdTRUE) {
+				continue;
+			}
+			uart_putc_raw(UART_PORT, ch);
+		}
+		vTaskDelay(xFrequency);
+	}
 }
 
-void io_uart_run(uint8_t itf)
+void io_uart_init(UBaseType_t priority_u2t, UBaseType_t priority_t2u)
 {
-    static touch_buffer_t u2t, t2u;
-    while (uart_is_readable(UART_PORT))
-    {
-        if (touch_buffer_on_data(&u2t, uart_getc(UART_PORT)))
-        {
-            handle_u2t(itf, u2t.buffer);
-        }
-    }
+	gpio_set_function(UART_TX, GPIO_FUNC_UART);
+	gpio_set_function(UART_RX, GPIO_FUNC_UART);
+	gpio_set_pulls(UART_TX, 1, 0);
+	gpio_set_pulls(UART_RX, 1, 0);
 
-    static bool connected = false;
-    if (tud_cdc_n_connected(itf) && !connected)
-    {
-        connected = true;
-        cdprintf("io_uart_run(): connected to cdc\r\n");
-    }
-    else if (!tud_cdc_n_connected(itf) && connected)
-    {
-        connected = false;
-        cdprintf("io_uart_run(): disconnected from cdc\r\n");
-    }
+	u2t_queue = xQueueCreate(BUFFER_SIZE, sizeof(char));
+	t2u_queue = xQueueCreate(BUFFER_SIZE, sizeof(char));
 
-    if (tud_cdc_n_available(itf))
-    {
-        while (true)
-        {
-            int32_t ch = tud_cdc_n_read_char(itf);
-            if (ch < 0)
-            {
-                break;
-            }
-            cdprintf("io_uart_run(): from cdc: %c\r\n", ch);
-            if (touch_buffer_on_data(&t2u, ch))
-            {
-                handle_t2u(itf, t2u.buffer);
-            }
-        }
-    }
+	uart_init(UART_PORT, UART_BAUDRATE);
+	uart_set_hw_flow(UART_PORT, false, false);
+	uart_set_format(UART_PORT, UART_DATABITS, UART_STOPBITS, UART_PARITY_NONE);
+	uart_set_fifo_enabled(UART_PORT, false);
+
+	irq_set_exclusive_handler(UART_IRQ, &u2t_read_isr);
+	irq_set_enabled(UART_IRQ, true);
+	uart_set_irq_enables(UART_PORT, true, false);
+
+	xTaskCreate(u2t_write_task, "u2t_write", configMINIMAL_STACK_SIZE, NULL, priority_u2t, NULL);
+
+	xTaskCreate(t2u_read_task, "t2u_read", configMINIMAL_STACK_SIZE, NULL, priority_t2u, NULL);
+	xTaskCreate(t2u_write_task, "t2u_write", configMINIMAL_STACK_SIZE, NULL, priority_t2u, NULL);
 }

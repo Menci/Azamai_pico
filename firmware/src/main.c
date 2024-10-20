@@ -25,8 +25,8 @@
 #ifdef AZAMAI_BUILD
 #include "uart.h"
 
-#include "FreeRTOS.h"
-#include "task.h"
+#include <FreeRTOS.h>
+#include <task.h>
 #endif
 
 #include "aime.h"
@@ -44,6 +44,11 @@
 #include "commands.h"
 #include "io.h"
 #include "hid.h"
+
+#define TASK_PRIORITY_HIGHEST (configMAX_PRIORITIES - 1)
+#define TASK_PRIORITY_HIGH    (configMAX_PRIORITIES - 2)
+#define TASK_PRIORITY_LOW     (configMAX_PRIORITIES - 3)
+#define TASK_PRIORITY_LOWEST  (configMAX_PRIORITIES - 4)
 
 static void button_lights_clear()
 {
@@ -196,10 +201,10 @@ void aime_task()
 
 void init_tasks()
 {
-    xTaskCreate(usbd_task, "usbd", configMINIMAL_STACK_SIZE, NULL, configMAX_PRIORITIES - 1, NULL);
-    xTaskCreate(io_task, "io", configMINIMAL_STACK_SIZE, NULL, configMAX_PRIORITIES - 2, NULL);
-    xTaskCreate(aime_task, "aime", configMINIMAL_STACK_SIZE, NULL, configMAX_PRIORITIES - 3, NULL);
-    xTaskCreate(cli_task, "cli", configMINIMAL_STACK_SIZE, NULL, configMAX_PRIORITIES - 4, NULL);
+    xTaskCreate(usbd_task, "usbd", configMINIMAL_STACK_SIZE, NULL, TASK_PRIORITY_HIGHEST, NULL);
+    xTaskCreate(io_task, "io", configMINIMAL_STACK_SIZE, NULL, TASK_PRIORITY_HIGH, NULL);
+    xTaskCreate(aime_task, "aime", configMINIMAL_STACK_SIZE, NULL, TASK_PRIORITY_LOW, NULL);
+    xTaskCreate(cli_task, "cli", configMINIMAL_STACK_SIZE, NULL, TASK_PRIORITY_LOWEST, NULL);
 }
 
 void vApplicationStackOverflowHook(TaskHandle_t xTask, char *pcTaskName)
@@ -235,7 +240,7 @@ void init()
     mutex_init(&core1_io_lock);
 
 #ifdef AZAMAI_BUILD
-    io_uart_init(UART_TX, UART_RX);
+    io_uart_init(TASK_PRIORITY_HIGH, TASK_PRIORITY_LOW);
 #else
     save_init(board_id_32() ^ 0xcafe1111, &core1_io_lock);
 
@@ -276,7 +281,7 @@ int main(void)
     set_sys_clock_khz(150000, true);
     board_init();
 
-    xTaskCreate(init, "init", configMINIMAL_STACK_SIZE, NULL, configMAX_PRIORITIES - 1, NULL);
+    xTaskCreate(init, "init", configMINIMAL_STACK_SIZE, NULL, TASK_PRIORITY_HIGHEST, NULL);
 
     vTaskStartScheduler();
 
