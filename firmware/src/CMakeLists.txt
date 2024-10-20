@@ -1,7 +1,8 @@
 pico_sdk_init()
 
-include_directories(${CMAKE_CURRENT_LIST_DIR})
-add_compile_options(-Wall -Werror -Wfatal-errors -Og -g)
+include_directories(${CMAKE_CURRENT_LIST_DIR}
+                    ${CMAKE_CURRENT_LIST_DIR}/FreeRTOSConfig)
+add_compile_options(-Wall -Werror -Wfatal-errors -Wno-error=unused-variable -Og -g)
 
 function(make_firmware board board_def)
     add_executable(${board}
@@ -22,7 +23,8 @@ function(make_firmware board board_def)
         aic
         pico_multicore pico_stdlib hardware_pio hardware_pwm hardware_flash
         hardware_adc hardware_i2c hardware_watchdog pico_unique_id
-        tinyusb_device tinyusb_board)
+        tinyusb_device tinyusb_board
+        FreeRTOS-Kernel FreeRTOS-Kernel-Heap4)
 
     pico_add_extra_outputs(${board})
 

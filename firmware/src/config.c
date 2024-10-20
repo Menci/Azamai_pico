@@ -127,11 +127,17 @@ static void config_loaded()
 
 void config_changed()
 {
+#ifdef AZAMAI_BUILD
+    return;
+#endif
     save_request(false);
 }
 
 void config_factory_reset()
 {
+#ifdef AZAMAI_BUILD
+    return;
+#endif
     *mai_cfg = default_cfg;
     save_request(true);
 }
@@ -139,4 +145,7 @@ void config_factory_reset()
 void config_init()
 {
     mai_cfg = (mai_cfg_t *)save_alloc(sizeof(*mai_cfg), &default_cfg, config_loaded);
+#ifdef AZAMAI_BUILD
+    *mai_cfg = default_cfg;
+#endif
 }

@@ -1,3 +1,6 @@
 [submodule "aic_pico"]
 	path = firmware/modules/aic_pico
 	url = https://github.com/whowechina/aic_pico
+[submodule "freertos"]
+	path = firmware/modules/freertos
+	url = https://github.com/FreeRTOS/FreeRTOS-Kernel

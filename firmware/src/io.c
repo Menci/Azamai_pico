@@ -6,6 +6,7 @@
 #include "usb_descriptors.h"
 
 #ifdef AZAMAI_BUILD
+#include "hardware/timer.h"
 #include "uart.h"
 #endif
 

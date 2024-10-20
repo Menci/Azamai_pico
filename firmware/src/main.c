@@ -7,6 +7,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#include "pico/platform.h"
 #include "pico/stdio.h"
 #include "pico/stdlib.h"
 #include "bsp/board.h"
@@ -23,6 +24,9 @@
 
 #ifdef AZAMAI_BUILD
 #include "uart.h"
+
+#include "FreeRTOS.h"
+#include "task.h"
 #endif
 
 #include "aime.h"
@@ -112,20 +116,10 @@ static void core1_loop()
     }
 }
 
-#ifdef AZAMAI_BUILD
-#define HID_TICK_SCALE 1
-#endif
+#ifndef AZAMAI_BUILD
 static void core0_loop()
 {
-#ifdef AZAMAI_BUILD
-    absolute_time_t next_frame = get_absolute_time();
-#else
     uint64_t next_frame = time_us_64();
-#endif
-
-#ifdef AZAMAI_BUILD
-    uint64_t hid_tick_counter = 0;
-#endif
 
     while(1) {
         tud_task();
@@ -136,14 +130,8 @@ static void core0_loop()
         save_loop();
         cli_fps_count(0);
 
-#ifdef AZAMAI_BUILD
-        sleep_until(next_frame);
-        next_frame = delayed_by_us(next_frame, 100); // 10KHz
-                           // (since we have a 9600 UART bridge)
-#else
         sleep_until(next_frame);
         next_frame += 1000; // 1KHz
-#endif
 
 #ifndef AZAMAI_BUILD
         touch_update();
@@ -151,22 +139,94 @@ static void core0_loop()
 
         button_update();
 
-#ifdef AZAMAI_BUILD
-        if (++hid_tick_counter == HID_TICK_SCALE) {
-            hid_update();
-            hid_tick_counter = 0;
-        }
-#else
         hid_update();
-#endif
+    }
+}
+#else
+void usbd_task()
+{
+    const TickType_t xFrequency = pdMS_TO_TICKS(1);
+    TickType_t xLastWakeTime = xTaskGetTickCount();
+
+    while (1) {
+        tud_task();
+
+        vTaskDelayUntil(&xLastWakeTime, xFrequency);
     }
 }
 
+void io_task()
+{
+    const TickType_t xFrequency = pdMS_TO_TICKS(1);
+    TickType_t xLastWakeTime = xTaskGetTickCount();
+
+    while (1) {
+        io_update();
+        button_update();
+        hid_update();
+
+        vTaskDelayUntil(&xLastWakeTime, xFrequency);
+    }
+}
+
+void cli_task()
+{
+    const TickType_t xFrequency = pdMS_TO_TICKS(1);
+    TickType_t xLastWakeTime = xTaskGetTickCount();
+
+    while (1) {
+        cli_run();
+        cli_fps_count(0);
+
+        vTaskDelayUntil(&xLastWakeTime, xFrequency);
+    }
+}
+
+void aime_task()
+{
+    const TickType_t xFrequency = pdMS_TO_TICKS(1);
+    TickType_t xLastWakeTime = xTaskGetTickCount();
+
+    while (1) {
+        aime_run();
+
+        vTaskDelayUntil(&xLastWakeTime, xFrequency);
+    }
+}
+
+void init_tasks()
+{
+    xTaskCreate(usbd_task, "usbd", configMINIMAL_STACK_SIZE, NULL, configMAX_PRIORITIES - 1, NULL);
+    xTaskCreate(io_task, "io", configMINIMAL_STACK_SIZE, NULL, configMAX_PRIORITIES - 2, NULL);
+    xTaskCreate(aime_task, "aime", configMINIMAL_STACK_SIZE, NULL, configMAX_PRIORITIES - 3, NULL);
+    xTaskCreate(cli_task, "cli", configMINIMAL_STACK_SIZE, NULL, configMAX_PRIORITIES - 4, NULL);
+}
+
+void vApplicationStackOverflowHook(TaskHandle_t xTask, char *pcTaskName)
+{
+    (void)xTask;
+    (void)pcTaskName;
+
+    while (1) {
+        tight_loop_contents();
+    }
+}
+
+void vApplicationMallocFailedHook(void)
+{
+    while (1) {
+        tight_loop_contents();
+    }
+}
+#endif
+
 void init()
 {
+#ifndef AZAMAI_BUILD
     sleep_ms(50);
     set_sys_clock_khz(150000, true);
     board_init();
+#endif
 
     tusb_init();
     stdio_init_all();
@@ -174,11 +234,11 @@ void init()
     config_init();
     mutex_init(&core1_io_lock);
 
-    save_init(board_id_32() ^ 0xcafe1111, &core1_io_lock);
-
 #ifdef AZAMAI_BUILD
     io_uart_init(UART_TX, UART_RX);
 #else
+    save_init(board_id_32() ^ 0xcafe1111, &core1_io_lock);
+
     touch_init();
 #endif
 
@@ -200,14 +260,37 @@ void init()
     commands_init();
 
     mai_runtime.key_stuck = button_is_stuck();
+
+#ifdef AZAMAI_BUILD
+    multicore_launch_core1(core1_loop);
+    init_tasks();
+    vTaskDelete(xTaskGetCurrentTaskHandle());
+    while (1);
+#endif
 }
 
 int main(void)
 {
+#ifdef AZAMAI_BUILD
+    sleep_ms(50);
+    set_sys_clock_khz(150000, true);
+    board_init();
+
+    xTaskCreate(init, "init", configMINIMAL_STACK_SIZE, NULL, configMAX_PRIORITIES - 1, NULL);
+
+    vTaskStartScheduler();
+
+    // Should never reach here
+    while (1) {
+        tight_loop_contents();
+    }
+#else
+
     init();
     multicore_launch_core1(core1_loop);
     core0_loop();
     return 0;
+#endif
 }
 
 // Invoked when received GET_REPORT control request

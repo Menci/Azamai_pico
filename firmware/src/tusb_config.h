@@ -34,6 +34,12 @@ extern "C" {
 // COMMON CONFIGURATION
 //--------------------------------------------------------------------
 
+#ifdef AZAMAI_BUILD
+#if CFG_TUSB_OS != OPT_OS_FREERTOS
+#error "Please patch your pico-sdk/lib/tinyusb/hw/bsp/rp2040/family.cmake"
+#endif
+#endif
+
 // defined by board.mk
 #ifndef CFG_TUSB_MCU
 #error CFG_TUSB_MCU must be defined
